@@ -2012,6 +2012,61 @@ func TestUsageCompletionGroup(t *testing.T) {
 	checkStringContains(t, output, "\ngroup\n  completion")
 }
 
+// TestHelpTopicPaddingIndependentOfAddCommandOrder builds the same tree twice:
+// once attaching "child" to the root before giving it its help topics, and once
+// giving "child" its help topics before attaching it to the root. The help of
+// "child" must be identical in both cases and the "Additional help topics"
+// column must be padded to the longest full command path, which includes the
+// root's name. It checks both the default usage function and the default
+// usage template.
+func TestHelpTopicPaddingIndependentOfAddCommandOrder(t *testing.T) {
+	buildTree := func(attachChildFirst bool, usageTemplate string) *Command {
+		root := &Command{Use: "root", Short: "test", Run: emptyRun}
+		root.CompletionOptions.DisableDefaultCmd = true
+		root.SetUsageTemplate(usageTemplate)
+		child := &Command{Use: "child", Short: "child command", Run: emptyRun}
+		addTopics := func() {
+			child.AddCommand(
+				&Command{Use: "short", Short: "short topic"},
+				&Command{Use: "a-much-longer-topic", Short: "long topic"},
+			)
+		}
+		if attachChildFirst {
+			root.AddCommand(child)
+			addTopics()
+		} else {
+			addTopics()
+			root.AddCommand(child)
+		}
+		return root
+	}
+
+	// The longest sibling path is "root child a-much-longer-topic" (30 chars).
+	expectedLine := "\n  " + rpad("root child short", 30) + " short topic\n"
+
+	for name, usageTemplate := range map[string]string{
+		"usage func":     "",
+		"usage template": defaultUsageTemplate,
+	} {
+		t.Run(name, func(t *testing.T) {
+			topDown, err := executeCommand(buildTree(true, usageTemplate), "child", "--help")
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			bottomUp, err := executeCommand(buildTree(false, usageTemplate), "child", "--help")
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			if topDown != bottomUp {
+				t.Errorf("Help output depends on AddCommand order.\nchild added to root first:\n%s\nchild added to root last:\n%s", topDown, bottomUp)
+			}
+			checkStringContains(t, topDown, expectedLine)
+			checkStringContains(t, bottomUp, expectedLine)
+		})
+	}
+}
+
 func TestUngroupedCommand(t *testing.T) {
 	var rootCmd = &Command{Use: "root", Short: "test", Run: emptyRun}
 
