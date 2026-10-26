@@ -790,6 +790,8 @@ Run 'hugo --help' for usage.
 
 Suggestions are automatically generated based on existing subcommands and use an implementation of [Levenshtein distance](https://en.wikipedia.org/wiki/Levenshtein_distance). Every registered command that matches a minimum distance of 2 (ignoring case) will be displayed as a suggestion.
 
+The same applies to positional arguments checked by `OnlyValidArgs`: when an argument is not in `ValidArgs`, the error suggests the `ValidArgs` entries within `SuggestionsMinimumDistance` (default 2) Levenshtein distance of it, as well as the entries that start with the typed text (both checks ignore case). Setting `DisableSuggestions` turns these suggestions off too.
+
 If you need to disable suggestions or tweak the string distance in your command, use:
 
 ```go
