@@ -164,6 +164,33 @@ func TestOnlyValidArgs_WithInvalidArgs(t *testing.T) {
 	validOnlyWithInvalidArgs(err, t)
 }
 
+// The misspelled argument "tw" comes after the valid argument "one", so the
+// suggestion must be computed for "tw" from ValidArgs, not for args[0].
+func TestOnlyValidArgs_SuggestsForInvalidArgAfterValid(t *testing.T) {
+	c := getCommand(OnlyValidArgs, true)
+	_, err := executeCommand(c, "one", "tw")
+	if err == nil {
+		t.Fatal("Expected an error")
+	}
+	got := err.Error()
+	expected := "invalid argument \"tw\" for \"c\"\n\nDid you mean this?\n\ttwo\n"
+	if got != expected {
+		t.Errorf("Expected: %q, got: %q", expected, got)
+	}
+
+	c = getCommand(OnlyValidArgs, true)
+	c.DisableSuggestions = true
+	_, err = executeCommand(c, "one", "tw")
+	if err == nil {
+		t.Fatal("Expected an error")
+	}
+	got = err.Error()
+	expected = `invalid argument "tw" for "c"`
+	if got != expected {
+		t.Errorf("Expected: %q, got: %q", expected, got)
+	}
+}
+
 // NoDuplicateArgs
 
 func TestNoDuplicateArgs(t *testing.T) {
