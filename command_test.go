@@ -1126,6 +1126,48 @@ func TestHelpExecutedOnNonRunnableChild(t *testing.T) {
 	checkStringContains(t, output, childCmd.Long)
 }
 
+// TestHelpTopicPaddingIndependentOfAddCommandOrder builds the same tree twice:
+// once attaching the child to the root before giving the child its help
+// topics, and once giving the child its help topics first and only then
+// attaching the child to the root. The help for the child must be identical
+// in both cases, with the help topic column padded to the longest full
+// command path.
+func TestHelpTopicPaddingIndependentOfAddCommandOrder(t *testing.T) {
+	buildTree := func(childFirst bool) *Command {
+		rootCmd := &Command{Use: "root", Run: emptyRun}
+		childCmd := &Command{Use: "child", Run: emptyRun}
+		longTopic := &Command{Use: "topic-alpha", Short: "long topic"}
+		shortTopic := &Command{Use: "topic-b", Short: "short topic"}
+		if childFirst {
+			childCmd.AddCommand(longTopic, shortTopic)
+			rootCmd.AddCommand(childCmd)
+		} else {
+			rootCmd.AddCommand(childCmd)
+			childCmd.AddCommand(longTopic, shortTopic)
+		}
+		return rootCmd
+	}
+
+	rootFirstHelp, err := executeCommand(buildTree(false), "help", "child")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	childFirstHelp, err := executeCommand(buildTree(true), "help", "child")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if rootFirstHelp != childFirstHelp {
+		t.Errorf("Help differs with AddCommand order.\nRoot first:\n%s\nChild first:\n%s", rootFirstHelp, childFirstHelp)
+	}
+
+	expected := `Additional help topics:
+  root child topic-alpha long topic
+  root child topic-b     short topic
+`
+	checkStringContains(t, childFirstHelp, expected)
+}
+
 func TestSetUsageTemplate(t *testing.T) {
 	rootCmd := &Command{Use: "root", Run: emptyRun}
 	childCmd := &Command{Use: "child", Run: emptyRun}
