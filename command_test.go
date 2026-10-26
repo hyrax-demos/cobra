@@ -1103,6 +1103,43 @@ func TestHelpFlagInHelp(t *testing.T) {
 	checkStringContains(t, output, "[flags]")
 }
 
+// TestHelpTopicPaddingIndependentOfAddCommandOrder builds the same tree twice:
+// once attaching the child to the root before giving it help topics, and once
+// giving the child its help topics before attaching it to the root. The help
+// output for the child must be the same in both cases, with the help topic
+// column padded to the longest full command path.
+func TestHelpTopicPaddingIndependentOfAddCommandOrder(t *testing.T) {
+	build := func(childAttachedFirst bool) *Command {
+		rootCmd := &Command{Use: "root", Run: emptyRun}
+		childCmd := &Command{Use: "child", Run: emptyRun}
+		longTopic := &Command{Use: "a-much-longer-topic", Short: "long topic"}
+		shortTopic := &Command{Use: "topic", Short: "short topic"}
+		if childAttachedFirst {
+			rootCmd.AddCommand(childCmd)
+			childCmd.AddCommand(longTopic, shortTopic)
+		} else {
+			childCmd.AddCommand(longTopic, shortTopic)
+			rootCmd.AddCommand(childCmd)
+		}
+		return rootCmd
+	}
+
+	attachedFirst, err := executeCommand(build(true), "child", "--help")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	attachedLast, err := executeCommand(build(false), "child", "--help")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if attachedFirst != attachedLast {
+		t.Errorf("Help output depends on AddCommand order.\nChild attached first:\n%s\nChild attached last:\n%s", attachedFirst, attachedLast)
+	}
+	// "root child a-much-longer-topic" is 30 characters long.
+	checkStringContains(t, attachedLast, fmt.Sprintf("\n  %-30s %s\n", "root child topic", "short topic"))
+}
+
 func TestFlagsInUsage(t *testing.T) {
 	rootCmd := &Command{Use: "root", Args: NoArgs, Run: func(*Command, []string) {}}
 	output, err := executeCommand(rootCmd, "--help")
