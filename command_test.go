@@ -1126,6 +1126,68 @@ func TestHelpExecutedOnNonRunnableChild(t *testing.T) {
 	checkStringContains(t, output, childCmd.Long)
 }
 
+// TestHelpOutputIndependentOfAddCommandOrder builds the same tree twice: once
+// attaching "topics" to the root before giving it its help-topic children, and
+// once giving "topics" its children before attaching it to the root. The child
+// command paths are longer than the minimum padding, so the "Additional help
+// topics" column only lines up if the padding reflects the full paths.
+func TestHelpOutputIndependentOfAddCommandOrder(t *testing.T) {
+	build := func(attachLast bool) (*Command, *Command) {
+		root := &Command{Use: "rootcmd", Run: emptyRun}
+		topics := &Command{Use: "topics", Short: "Topic parent"}
+		leaves := []*Command{
+			{Use: "alpha", Short: "A"},
+			{Use: "beta-longer", Short: "B"},
+		}
+		if attachLast {
+			topics.AddCommand(leaves...)
+			root.AddCommand(topics)
+		} else {
+			root.AddCommand(topics)
+			topics.AddCommand(leaves...)
+		}
+		return root, topics
+	}
+
+	compare := func(t *testing.T, setTemplate bool) {
+		firstRoot, firstTopics := build(false)
+		lastRoot, lastTopics := build(true)
+		if setTemplate {
+			firstRoot.SetUsageTemplate(defaultUsageTemplate)
+			lastRoot.SetUsageTemplate(defaultUsageTemplate)
+		}
+
+		firstUsage := firstTopics.UsageString()
+		lastUsage := lastTopics.UsageString()
+		if firstUsage != lastUsage {
+			t.Errorf("topics usage differs by AddCommand order:\nattach first:\n%s\nattach last:\n%s", firstUsage, lastUsage)
+		}
+		// "rootcmd topics beta-longer" is 26 characters, so "rootcmd topics alpha"
+		// (20 characters) is padded with 6 spaces, then one separator space.
+		checkStringContains(t, lastUsage, "rootcmd topics alpha"+strings.Repeat(" ", 7)+"A")
+
+		if first, last := firstRoot.UsageString(), lastRoot.UsageString(); first != last {
+			t.Errorf("root usage differs by AddCommand order:\nattach first:\n%s\nattach last:\n%s", first, last)
+		}
+
+		firstHelp, err := executeCommand(firstRoot, "help", "topics")
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		lastHelp, err := executeCommand(lastRoot, "help", "topics")
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		if firstHelp != lastHelp {
+			t.Errorf("help output differs by AddCommand order:\nattach first:\n%s\nattach last:\n%s", firstHelp, lastHelp)
+		}
+		checkStringContains(t, lastHelp, "rootcmd topics alpha"+strings.Repeat(" ", 7)+"A")
+	}
+
+	t.Run("default usage func", func(t *testing.T) { compare(t, false) })
+	t.Run("default usage template", func(t *testing.T) { compare(t, true) })
+}
+
 func TestSetUsageTemplate(t *testing.T) {
 	rootCmd := &Command{Use: "root", Run: emptyRun}
 	childCmd := &Command{Use: "child", Run: emptyRun}
