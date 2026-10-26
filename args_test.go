@@ -164,6 +164,25 @@ func TestOnlyValidArgs_WithInvalidArgs(t *testing.T) {
 	validOnlyWithInvalidArgs(err, t)
 }
 
+// TestOnlyValidArgs_SuggestsForInvalidArgAfterValidOne passes a valid argument
+// followed by a misspelled one ("one tw") and checks that the "Did you mean"
+// hint is computed for the misspelled argument. Suggestions come from
+// subcommand names, so the command gets a "two" subcommand to suggest.
+func TestOnlyValidArgs_SuggestsForInvalidArgAfterValidOne(t *testing.T) {
+	c := getCommand(OnlyValidArgs, true)
+	c.AddCommand(&Command{Use: "two", Run: emptyRun})
+
+	_, err := executeCommand(c, "one", "tw")
+	if err == nil {
+		t.Fatal("Expected an error")
+	}
+	got := err.Error()
+	expected := "invalid argument \"tw\" for \"c\"\n\nDid you mean this?\n\ttwo\n"
+	if got != expected {
+		t.Errorf("Expected: %q, got: %q", expected, got)
+	}
+}
+
 // NoDuplicateArgs
 
 func TestNoDuplicateArgs(t *testing.T) {
