@@ -47,7 +47,8 @@ func NoArgs(cmd *Command, args []string) error {
 }
 
 // OnlyValidArgs returns an error if there are any positional args that are not in
-// the `ValidArgs` field of `Command`
+// the `ValidArgs` field of `Command`. Unless DisableSuggestions is set, the error
+// suggests close matches for the invalid argument from ValidArgs and subcommands.
 func OnlyValidArgs(cmd *Command, args []string) error {
 	if len(cmd.ValidArgs) > 0 {
 		// Remove any description that may be included in ValidArgs.
@@ -58,11 +59,42 @@ func OnlyValidArgs(cmd *Command, args []string) error {
 		}
 		for _, v := range args {
 			if !stringInSlice(v, validArgs) {
-				return fmt.Errorf("invalid argument %q for %q%s", v, cmd.CommandPath(), cmd.findSuggestions(args[0]))
+				return fmt.Errorf("invalid argument %q for %q%s", v, cmd.CommandPath(), cmd.findValidArgSuggestions(v, validArgs))
 			}
 		}
 	}
 	return nil
+}
+
+// findValidArgSuggestions returns a "Did you mean this?" hint for arg, listing
+// the subcommands suggested by SuggestionsFor followed by the entries of
+// validArgs that are within SuggestionsMinimumDistance of arg or start with it.
+func (c *Command) findValidArgSuggestions(arg string, validArgs []string) string {
+	if c.DisableSuggestions {
+		return ""
+	}
+	if c.SuggestionsMinimumDistance <= 0 {
+		c.SuggestionsMinimumDistance = 2
+	}
+	suggestions := c.SuggestionsFor(arg)
+	for _, va := range validArgs {
+		if stringInSlice(va, suggestions) {
+			continue
+		}
+		suggestByLevenshtein := ld(arg, va, true) <= c.SuggestionsMinimumDistance
+		suggestByPrefix := arg != "" && strings.HasPrefix(strings.ToLower(va), strings.ToLower(arg))
+		if suggestByLevenshtein || suggestByPrefix {
+			suggestions = append(suggestions, va)
+		}
+	}
+	var sb strings.Builder
+	if len(suggestions) > 0 {
+		sb.WriteString("\n\nDid you mean this?\n")
+		for _, s := range suggestions {
+			_, _ = fmt.Fprintf(&sb, "\t%v\n", s)
+		}
+	}
+	return sb.String()
 }
 
 // NoDuplicateArgs returns an error if there are any duplicate positional args.

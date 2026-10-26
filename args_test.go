@@ -164,6 +164,36 @@ func TestOnlyValidArgs_WithInvalidArgs(t *testing.T) {
 	validOnlyWithInvalidArgs(err, t)
 }
 
+// A valid argument ("one") precedes a misspelled one ("tw"), so the
+// suggestion must be computed for the second argument, not the first.
+func TestOnlyValidArgs_SuggestsForInvalidArgNotFirst(t *testing.T) {
+	c := getCommand(OnlyValidArgs, true)
+	_, err := executeCommand(c, "one", "tw")
+	if err == nil {
+		t.Fatal("Expected an error")
+	}
+	got := err.Error()
+	expected := "invalid argument \"tw\" for \"c\"\n\nDid you mean this?\n\ttwo\n"
+	if got != expected {
+		t.Errorf("Unexpected response.\nExpected:\n %q\nGot:\n %q\n", expected, got)
+	}
+}
+
+// The same "one tw" input yields no suggestion when DisableSuggestions is set.
+func TestOnlyValidArgs_DisableSuggestions(t *testing.T) {
+	c := getCommand(OnlyValidArgs, true)
+	c.DisableSuggestions = true
+	_, err := executeCommand(c, "one", "tw")
+	if err == nil {
+		t.Fatal("Expected an error")
+	}
+	got := err.Error()
+	expected := `invalid argument "tw" for "c"`
+	if got != expected {
+		t.Errorf("Unexpected response.\nExpected:\n %q\nGot:\n %q\n", expected, got)
+	}
+}
+
 // NoDuplicateArgs
 
 func TestNoDuplicateArgs(t *testing.T) {

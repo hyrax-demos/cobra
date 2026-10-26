@@ -222,9 +222,8 @@ type Command struct {
 	// parent is a parent command for this command.
 	parent *Command
 	// Max lengths of commands' string lengths for use in padding.
-	commandsMaxUseLen         int
-	commandsMaxCommandPathLen int
-	commandsMaxNameLen        int
+	commandsMaxUseLen  int
+	commandsMaxNameLen int
 
 	// TraverseChildren parses flags on all parents before executing child command.
 	TraverseChildren bool
@@ -570,11 +569,19 @@ func (c *Command) UsagePadding() int {
 const minCommandPathPadding = 11
 
 // CommandPathPadding return padding for the command path.
+// The padding is computed from the siblings' current command paths, so it
+// does not depend on the order in which commands were added to the tree.
 func (c *Command) CommandPathPadding() int {
-	if c.parent == nil || minCommandPathPadding > c.parent.commandsMaxCommandPathLen {
+	if c.parent == nil {
 		return minCommandPathPadding
 	}
-	return c.parent.commandsMaxCommandPathLen
+	maxLen := minCommandPathPadding
+	for _, sib := range c.parent.commands {
+		if l := len(sib.CommandPath()); l > maxLen {
+			maxLen = l
+		}
+	}
+	return maxLen
 }
 
 const minNamePadding = 11
@@ -1350,10 +1357,6 @@ func (c *Command) AddCommand(cmds ...*Command) {
 		if usageLen > c.commandsMaxUseLen {
 			c.commandsMaxUseLen = usageLen
 		}
-		commandPathLen := len(x.CommandPath())
-		if commandPathLen > c.commandsMaxCommandPathLen {
-			c.commandsMaxCommandPathLen = commandPathLen
-		}
 		nameLen := len(x.Name())
 		if nameLen > c.commandsMaxNameLen {
 			c.commandsMaxNameLen = nameLen
@@ -1413,16 +1416,11 @@ main:
 	c.commands = commands
 	// recompute all lengths
 	c.commandsMaxUseLen = 0
-	c.commandsMaxCommandPathLen = 0
 	c.commandsMaxNameLen = 0
 	for _, command := range c.commands {
 		usageLen := len(command.Use)
 		if usageLen > c.commandsMaxUseLen {
 			c.commandsMaxUseLen = usageLen
-		}
-		commandPathLen := len(command.CommandPath())
-		if commandPathLen > c.commandsMaxCommandPathLen {
-			c.commandsMaxCommandPathLen = commandPathLen
 		}
 		nameLen := len(command.Name())
 		if nameLen > c.commandsMaxNameLen {
