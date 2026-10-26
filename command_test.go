@@ -1126,6 +1126,58 @@ func TestHelpExecutedOnNonRunnableChild(t *testing.T) {
 	checkStringContains(t, output, childCmd.Long)
 }
 
+// TestHelpTopicPaddingIndependentOfAddCommandOrder builds root -> child ->
+// {a, longtopic} once with child attached to root before its help topics are
+// added, and once with the help topics added before child is attached to root.
+// It checks that "child --help" prints the same text for both orders and that
+// "root child a" is padded to the width of "root child longtopic", through
+// both the default usage function and the default usage template.
+func TestHelpTopicPaddingIndependentOfAddCommandOrder(t *testing.T) {
+	build := func(attachRootFirst bool) *Command {
+		root := &Command{Use: "root", Run: emptyRun}
+		child := &Command{Use: "child", Run: emptyRun}
+		a := &Command{Use: "a", Short: "short topic"}
+		long := &Command{Use: "longtopic", Short: "long topic"}
+		if attachRootFirst {
+			root.AddCommand(child)
+			child.AddCommand(a, long)
+		} else {
+			child.AddCommand(a, long)
+			root.AddCommand(child)
+		}
+		return root
+	}
+
+	expected := "  " + rpad("root child a", len("root child longtopic")) + " short topic"
+
+	run := func(t *testing.T, useTemplate bool) {
+		outputs := make(map[bool]string)
+		for _, attachRootFirst := range []bool{true, false} {
+			root := build(attachRootFirst)
+			if useTemplate {
+				child, _, err := root.Find([]string{"child"})
+				if err != nil {
+					t.Fatalf("Unexpected error finding child: %v", err)
+				}
+				child.SetUsageTemplate(child.UsageTemplate())
+			}
+			output, err := executeCommand(root, "child", "--help")
+			if err != nil {
+				t.Fatalf("Unexpected error (attachRootFirst=%v): %v", attachRootFirst, err)
+			}
+			outputs[attachRootFirst] = output
+		}
+
+		if outputs[true] != outputs[false] {
+			t.Errorf("Help output depends on AddCommand order.\nRoot attached first:\n%s\nRoot attached last:\n%s", outputs[true], outputs[false])
+		}
+		checkStringContains(t, outputs[false], expected)
+	}
+
+	t.Run("default usage func", func(t *testing.T) { run(t, false) })
+	t.Run("usage template", func(t *testing.T) { run(t, true) })
+}
+
 func TestSetUsageTemplate(t *testing.T) {
 	rootCmd := &Command{Use: "root", Run: emptyRun}
 	childCmd := &Command{Use: "child", Run: emptyRun}
