@@ -1126,6 +1126,53 @@ func TestHelpExecutedOnNonRunnableChild(t *testing.T) {
 	checkStringContains(t, output, childCmd.Long)
 }
 
+// TestHelpOutputIndependentOfAddCommandOrder builds the same tree twice: once
+// attaching the child to the root before giving it two help topics of
+// different lengths, and once giving the child its topics before attaching it
+// to the root. The "child --help" output must be the same both ways, with the
+// shorter topic padded to the full "root child longer-topic" path, through the
+// default usage function and through an explicit usage template.
+func TestHelpOutputIndependentOfAddCommandOrder(t *testing.T) {
+	build := func(attachFirst bool, useTemplate bool) *Command {
+		rootCmd := &Command{Use: "root", Run: emptyRun}
+		childCmd := &Command{Use: "child", Short: "child cmd"}
+		shortTopic := &Command{Use: "a-topic", Short: "short topic"}
+		longTopic := &Command{Use: "longer-topic", Short: "long topic"}
+		if attachFirst {
+			rootCmd.AddCommand(childCmd)
+			childCmd.AddCommand(shortTopic, longTopic)
+		} else {
+			childCmd.AddCommand(shortTopic, longTopic)
+			rootCmd.AddCommand(childCmd)
+		}
+		if useTemplate {
+			rootCmd.SetUsageTemplate(rootCmd.UsageTemplate())
+		}
+		return rootCmd
+	}
+
+	expected := fmt.Sprintf("%-*s", len("root child longer-topic"), "root child a-topic") + " short topic"
+
+	for _, useTemplate := range []bool{false, true} {
+		t.Run(fmt.Sprintf("useTemplate=%v", useTemplate), func(t *testing.T) {
+			attachedFirst, err := executeCommand(build(true, useTemplate), "child", "--help")
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			attachedLast, err := executeCommand(build(false, useTemplate), "child", "--help")
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			if attachedFirst != attachedLast {
+				t.Errorf("help output depends on AddCommand order\nchild attached first:\n%s\nchild attached last:\n%s", attachedFirst, attachedLast)
+			}
+			checkStringContains(t, attachedFirst, expected)
+			checkStringContains(t, attachedLast, expected)
+		})
+	}
+}
+
 func TestSetUsageTemplate(t *testing.T) {
 	rootCmd := &Command{Use: "root", Run: emptyRun}
 	childCmd := &Command{Use: "child", Run: emptyRun}
