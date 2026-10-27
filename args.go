@@ -58,11 +58,46 @@ func OnlyValidArgs(cmd *Command, args []string) error {
 		}
 		for _, v := range args {
 			if !stringInSlice(v, validArgs) {
-				return fmt.Errorf("invalid argument %q for %q%s", v, cmd.CommandPath(), cmd.findSuggestions(args[0]))
+				return fmt.Errorf("invalid argument %q for %q%s", v, cmd.CommandPath(), cmd.findValidArgsSuggestions(v, validArgs))
 			}
 		}
 	}
 	return nil
+}
+
+// findValidArgsSuggestions returns the "Did you mean this?" hint for an invalid
+// positional argument, in the same format as findSuggestions. It lists the
+// subcommand suggestions from SuggestionsFor, followed by each entry of
+// validArgs that is within SuggestionsMinimumDistance of arg or that arg is a
+// prefix of (both ignoring case). It returns "" when suggestions are disabled
+// or nothing matches.
+func (c *Command) findValidArgsSuggestions(arg string, validArgs []string) string {
+	if c.DisableSuggestions {
+		return ""
+	}
+	if c.SuggestionsMinimumDistance <= 0 {
+		c.SuggestionsMinimumDistance = 2
+	}
+	suggestions := c.SuggestionsFor(arg)
+	for _, s := range validArgs {
+		if stringInSlice(s, suggestions) {
+			continue
+		}
+		suggestByLevenshtein := ld(arg, s, true) <= c.SuggestionsMinimumDistance
+		suggestByPrefix := arg != "" && strings.HasPrefix(strings.ToLower(s), strings.ToLower(arg))
+		if suggestByLevenshtein || suggestByPrefix {
+			suggestions = append(suggestions, s)
+		}
+	}
+	if len(suggestions) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("\n\nDid you mean this?\n")
+	for _, s := range suggestions {
+		_, _ = fmt.Fprintf(&sb, "\t%v\n", s)
+	}
+	return sb.String()
 }
 
 // NoDuplicateArgs returns an error if there are any duplicate positional args.
