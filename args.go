@@ -58,11 +58,46 @@ func OnlyValidArgs(cmd *Command, args []string) error {
 		}
 		for _, v := range args {
 			if !stringInSlice(v, validArgs) {
-				return fmt.Errorf("invalid argument %q for %q%s", v, cmd.CommandPath(), cmd.findSuggestions(args[0]))
+				return fmt.Errorf("invalid argument %q for %q%s", v, cmd.CommandPath(), cmd.findValidArgSuggestions(v, validArgs))
 			}
 		}
 	}
 	return nil
+}
+
+// findValidArgSuggestions returns the "Did you mean this?" suffix for an
+// invalid positional argument. Candidates are the subcommand suggestions from
+// SuggestionsFor followed by the entries of validArgs, not already listed,
+// that are within SuggestionsMinimumDistance of arg or that start with arg
+// (both ignoring case).
+// It returns "" when suggestions are disabled or nothing matches.
+func (c *Command) findValidArgSuggestions(arg string, validArgs []string) string {
+	if c.DisableSuggestions {
+		return ""
+	}
+	if c.SuggestionsMinimumDistance <= 0 {
+		c.SuggestionsMinimumDistance = 2
+	}
+	suggestions := c.SuggestionsFor(arg)
+	for _, s := range validArgs {
+		if stringInSlice(s, suggestions) {
+			continue
+		}
+		suggestByLevenshtein := ld(arg, s, true) <= c.SuggestionsMinimumDistance
+		suggestByPrefix := strings.HasPrefix(strings.ToLower(s), strings.ToLower(arg))
+		if suggestByLevenshtein || suggestByPrefix {
+			suggestions = append(suggestions, s)
+		}
+	}
+	if len(suggestions) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("\n\nDid you mean this?\n")
+	for _, s := range suggestions {
+		_, _ = fmt.Fprintf(&sb, "\t%v\n", s)
+	}
+	return sb.String()
 }
 
 // NoDuplicateArgs returns an error if there are any duplicate positional args.
