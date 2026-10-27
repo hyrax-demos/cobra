@@ -164,6 +164,38 @@ func TestOnlyValidArgs_WithInvalidArgs(t *testing.T) {
 	validOnlyWithInvalidArgs(err, t)
 }
 
+// TestOnlyValidArgs_SuggestsForInvalidArgAfterValidArg passes a valid argument
+// followed by a misspelled one, so the hint must be computed for the second
+// argument and drawn from ValidArgs (the command has no subcommands).
+func TestOnlyValidArgs_SuggestsForInvalidArgAfterValidArg(t *testing.T) {
+	t.Run("suggestions enabled", func(t *testing.T) {
+		c := getCommand(OnlyValidArgs, true)
+		_, err := executeCommand(c, "one", "tw")
+		if err == nil {
+			t.Fatal("Expected an error")
+		}
+		got := err.Error()
+		expected := "invalid argument \"tw\" for \"c\"\n\nDid you mean this?\n\ttwo\n"
+		if got != expected {
+			t.Errorf("Expected: %q, got: %q", expected, got)
+		}
+	})
+
+	t.Run("suggestions disabled", func(t *testing.T) {
+		c := getCommand(OnlyValidArgs, true)
+		c.DisableSuggestions = true
+		_, err := executeCommand(c, "one", "tw")
+		if err == nil {
+			t.Fatal("Expected an error")
+		}
+		got := err.Error()
+		expected := `invalid argument "tw" for "c"`
+		if got != expected {
+			t.Errorf("Expected: %q, got: %q", expected, got)
+		}
+	})
+}
+
 // NoDuplicateArgs
 
 func TestNoDuplicateArgs(t *testing.T) {
