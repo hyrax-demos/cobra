@@ -1594,6 +1594,57 @@ func TestRemoveCommand(t *testing.T) {
 	}
 }
 
+// TestCommandPathPaddingIndependentOfAddCommandOrder builds the same tree
+// twice: once attaching childcmd to root before childcmd gets its two help
+// topics, and once attaching the help topics first and childcmd to root last.
+// The topics have different lengths, so their padding is visible in the
+// "Additional help topics" section, and the help output of both trees must
+// match for the default renderer and for the template renderer.
+func TestCommandPathPaddingIndependentOfAddCommandOrder(t *testing.T) {
+	build := func(rootFirst bool) *Command {
+		rootCmd := &Command{Use: "root", Run: emptyRun}
+		childCmd := &Command{Use: "childcmd", Short: "child", Run: emptyRun}
+		topicCmd := &Command{Use: "topic", Short: "short topic"}
+		longerTopicCmd := &Command{Use: "longertopic", Short: "long topic"}
+		if rootFirst {
+			rootCmd.AddCommand(childCmd)
+			childCmd.AddCommand(topicCmd, longerTopicCmd)
+		} else {
+			childCmd.AddCommand(topicCmd, longerTopicCmd)
+			rootCmd.AddCommand(childCmd)
+		}
+		return rootCmd
+	}
+
+	compare := func(t *testing.T, rootFirst, rootLast *Command) {
+		rootFirstOutput, err := executeCommand(rootFirst, "help", "childcmd")
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		rootLastOutput, err := executeCommand(rootLast, "help", "childcmd")
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		checkStringContains(t, rootFirstOutput, "Additional help topics")
+		checkStringContains(t, rootLastOutput, "Additional help topics")
+		if rootFirstOutput != rootLastOutput {
+			t.Errorf("Help output depends on AddCommand order.\nRoot attached first:\n%s\nRoot attached last:\n%s", rootFirstOutput, rootLastOutput)
+		}
+	}
+
+	t.Run("default renderer", func(t *testing.T) {
+		compare(t, build(true), build(false))
+	})
+
+	t.Run("template renderer", func(t *testing.T) {
+		rootFirst := build(true)
+		rootFirst.SetUsageTemplate(defaultUsageTemplate)
+		rootLast := build(false)
+		rootLast.SetUsageTemplate(defaultUsageTemplate)
+		compare(t, rootFirst, rootLast)
+	})
+}
+
 func TestReplaceCommandWithRemove(t *testing.T) {
 	childUsed := 0
 	rootCmd := &Command{Use: "root", Run: emptyRun}
